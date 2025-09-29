@@ -1,68 +1,41 @@
-import { useEffect, useState } from "react";
-import "./App.css";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import PokemonList from "./components/PokemonList";
 import Pagination from "./components/Pagination";
 
 function App() {
-  const [pokemon, setPokemon] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [currentPageUrl, setCurrentPageUrl] = useState(
     "https://pokeapi.co/api/v2/pokemon"
   );
-  const [nextPageUrl, setNextPageUrl] = useState();
-  const [prevPageUrl, setPrevPageUrl] = useState();
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    setLoading(true);
-    const fetchData = async () => {
-      try {
-        const res = await axios.get(currentPageUrl);
-        setPokemon(res.data.results);
-        setNextPageUrl(res.data.next);
-        setPrevPageUrl(res.data.previous);
+  const fetchPokemon = async ({ queryKey }) => {
+    const url = queryKey[1];
+    const res = await axios.get(url);
+    return res.data;
+  };
 
-        
-        const url = new URL(currentPageUrl);
-        const offset = url.searchParams.get("offset") || 0;
-        const limit = url.searchParams.get("limit") || 20;
-        setPage(Math.floor(offset / limit) + 1);
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["pokemon", currentPageUrl],
+    queryFn: fetchPokemon,
+    keepPreviousData: true, 
+  });
 
-       
-        const count = res.data.count; // total pokemons
-        setTotalPages(Math.ceil(count / limit));
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [currentPageUrl]);
+  if (isLoading) return <p>Loading...</p>;
+  if (isError) return <p>Something went wrong</p>;
 
-  function goToNextPage() {
-    setCurrentPageUrl(nextPageUrl);
-  }
+  // pagination info
+  const pokemon = data.results;
+  const nextPageUrl = data.next;
+  const prevPageUrl = data.previous;
+  const count = data.count;
+  const limit = 20;
+  const page = Math.floor(
+    (new URL(currentPageUrl).searchParams.get("offset") || 0) / limit
+  ) + 1;
+  const totalPages = Math.ceil(count / limit);
 
-  function goToPrevPage() {
-    setCurrentPageUrl(prevPageUrl);
-  }
-
-  function goToFirstPage() {
-    setCurrentPageUrl("https://pokeapi.co/api/v2/pokemon?offset=0&limit=20");
-  }
-
-  function goToLastPage() {
-    const lastOffset = (totalPages - 1) * 20;
-    setCurrentPageUrl(
-      `https://pokeapi.co/api/v2/pokemon?offset=${lastOffset}&limit=20`
-    );
-  }
-
-  
   const filteredPokemon = pokemon.filter((p) =>
     p.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -74,7 +47,7 @@ function App() {
           Pokédex
         </h1>
 
-        {/* 🔍 Search bar */}
+        {/* 🔍 Search */}
         <div className="mb-6 flex justify-center">
           <input
             type="text"
@@ -85,28 +58,22 @@ function App() {
           />
         </div>
 
-        {loading ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
-            {Array(6)
-              .fill("")
-              .map((_, i) => (
-                <div
-                  key={i}
-                  className="bg-gray-200 animate-pulse h-32 rounded-xl"
-                ></div>
-              ))}
-          </div>
-        ) : (
-          <PokemonList pokemon={filteredPokemon} />
-        )}
+        <PokemonList pokemon={filteredPokemon} />
 
         <div className="mt-6 flex flex-col items-center gap-3">
           <Pagination
             prevPageUrl={prevPageUrl}
-            goToNextPage={goToNextPage}
-            goToPrevPage={goToPrevPage}
-            goToFirstPage={goToFirstPage}
-            goToLastPage={goToLastPage}
+            goToNextPage={() => setCurrentPageUrl(nextPageUrl)}
+            goToPrevPage={() => setCurrentPageUrl(prevPageUrl)}
+            goToFirstPage={() =>
+              setCurrentPageUrl("https://pokeapi.co/api/v2/pokemon?offset=0&limit=20")
+            }
+            goToLastPage={() => {
+              const lastOffset = (totalPages - 1) * limit;
+              setCurrentPageUrl(
+                `https://pokeapi.co/api/v2/pokemon?offset=${lastOffset}&limit=${limit}`
+              );
+            }}
           />
 
           <p className="text-gray-600 font-medium">
